@@ -14,6 +14,8 @@
     search: "",
     mode: "new",
     replyId: null,
+    checked: new Set(),
+    selecting: false,
   };
 
   function esc(value) {
@@ -103,8 +105,9 @@
       if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
       return a.displayName.localeCompare(b.displayName);
     });
+    state.folders = orderFolders(state.folders);
     if (!state.folderId) {
-      const inbox = state.folders.find((folder) => folder.wellKnownName === "inbox") || state.folders[0];
+      const inbox = state.folders.find((folder) => folder.wellKnownName === "inbox" || String(folder.displayName || "").toLowerCase() === "inbox") || state.folders[0];
       state.folderId = inbox ? inbox.id : null;
     }
     renderFolders();
@@ -119,6 +122,42 @@
       id = byId.get(id).parentFolderId;
     }
     return level;
+  }
+
+  function folderRank(folder) {
+    const known = String(folder.wellKnownName || "").toLowerCase();
+    const name = String(folder.displayName || "").toLowerCase();
+    if (known === "inbox" || name === "inbox") return 0;
+    const order = ["drafts", "sentitems", "archive", "junkemail", "deleteditems"];
+    const byName = { drafts: 1, "sent items": 2, sent: 2, archive: 3, "junk email": 4, junk: 4, "deleted items": 5, trash: 5 };
+    const index = order.indexOf(known);
+    if (index !== -1) return index + 1;
+    if (byName[name] != null) return byName[name];
+    return 50;
+  }
+
+  function orderFolders(folders) {
+    const ids = new Set(folders.map((folder) => folder.id));
+    const children = new Map();
+    const roots = [];
+    folders.forEach((folder) => {
+      if (folder.parentFolderId && ids.has(folder.parentFolderId)) {
+        if (!children.has(folder.parentFolderId)) children.set(folder.parentFolderId, []);
+        children.get(folder.parentFolderId).push(folder);
+      } else {
+        roots.push(folder);
+      }
+    });
+    const out = [];
+    const walk = (list) => {
+      list.sort((a, b) => folderRank(a) - folderRank(b) || a.displayName.localeCompare(b.displayName));
+      list.forEach((folder) => {
+        out.push(folder);
+        if (children.has(folder.id)) walk(children.get(folder.id));
+      });
+    };
+    walk(roots);
+    return out;
   }
 
   function renderFolders() {
@@ -177,24 +216,167 @@
     renderList();
   }
 
+  function knownFolder(name) {
+    return state.folders.find((folder) => folder.wellKnownName === name) || null;
+  }
+
+  function renderSelection() {
+    const on = state.selecting;
+    $("select-toggle").textContent = on ? "Cancel" : "Select";
+    $("select-all").hidden = !on;
+    $("bulk-archive").hidden = !on;
+    $("bulk-delete").hidden = !on;
+    $("bulk-move").hidden = !on;
+    $("select-count").textContent = on ? state.checked.size + " selected" : "";
+    $("list-col").classList.toggle("selecting", on);
+    const move = $("bulk-move");
+    move.replaceChildren();
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Move";
+    move.appendChild(placeholder);
+    state.folders.forEach((folder) => {
+      if (folder.id === state.folderId) return;
+      const option = document.createElement("option");
+      option.value = folder.id;
+      option.textContent = folder.displayName;
+      move.appendChild(option);
+    });
+  }
+
+  function toggleChecked(id) {
+    if (state.checked.has(id)) state.checked.delete(id);
+    else state.checked.add(id);
+    renderList();
+  }
+
+  function bindSwipe(row, message) {
+    const front = row.querySelector(".msg-front");
+    let startX = 0;
+    let startY = 0;
+    let dx = 0;
+    let tracking = false;
+    let horizontal = false;
+    let timer = 0;
+    let suppress = false;
+
+    function place(x, snap) {
+      front.style.transition = snap ? "transform 0.16s ease" : "none";
+      front.style.transform = "translateX(" + x + "px)";
+      row.classList.toggle("show-delete", x < -20);
+      row.classList.toggle("show-archive", x > 20);
+    }
+
+    row.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || state.selecting) return;
+      tracking = true;
+      horizontal = false;
+      dx = 0;
+      startX = event.clientX;
+      startY = event.clientY;
+      timer = window.setTimeout(() => {
+        if (!tracking) return;
+        horizontal = true;
+        place(dx > 12 ? 88 : -88, true);
+      }, 460);
+    });
+    row.addEventListener("pointermove", (event) => {
+      if (!tracking) return;
+      dx = event.clientX - startX;
+      const dy = event.clientY - startY;
+      if (!horizontal) {
+        if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) {
+          window.clearTimeout(timer);
+          tracking = false;
+          return;
+        }
+        if (Math.abs(dx) < 8) return;
+        horizontal = true;
+        window.clearTimeout(timer);
+        row.setPointerCapture(event.pointerId);
+      }
+      place(Math.max(-168, Math.min(168, dx)), false);
+    });
+    function finish() {
+      window.clearTimeout(timer);
+      if (!tracking) return;
+      tracking = false;
+      if (!horizontal) {
+        place(0, true);
+        return;
+      }
+      if (dx <= -120) {
+        suppress = true;
+        trashMessages([message.id]).catch(toast);
+        return;
+      }
+      if (dx >= 120) {
+        suppress = true;
+        archiveMessages([message.id]).catch(toast);
+        return;
+      }
+      if (dx <= -48) {
+        suppress = true;
+        place(-88, true);
+        return;
+      }
+      if (dx >= 48) {
+        suppress = true;
+        place(88, true);
+        return;
+      }
+      place(0, true);
+    }
+    row.addEventListener("pointerup", finish);
+    row.addEventListener("pointercancel", () => {
+      window.clearTimeout(timer);
+      tracking = false;
+      place(0, true);
+    });
+    front.addEventListener("click", () => {
+      if (suppress) {
+        suppress = false;
+        return;
+      }
+      if (state.selecting) {
+        toggleChecked(message.id);
+        return;
+      }
+      openMessage(message.id).catch(toast);
+    });
+    row.querySelector(".swipe-delete").addEventListener("click", (event) => {
+      event.stopPropagation();
+      trashMessages([message.id]).catch(toast);
+    });
+    row.querySelector(".swipe-archive").addEventListener("click", (event) => {
+      event.stopPropagation();
+      archiveMessages([message.id]).catch(toast);
+    });
+  }
+
   function renderList() {
     const list = $("list");
+    renderSelection();
     if (!state.messages.length) {
       list.innerHTML = '<p class="empty">Nothing in this folder.</p>';
       return;
     }
     const frag = document.createDocumentFragment();
     state.messages.forEach((message) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "message" + (message.isRead ? "" : " unread") + (message.id === state.selected ? " active" : "");
-      button.innerHTML =
+      const row = document.createElement("div");
+      row.className = "msg" + (message.isRead ? "" : " unread") + (message.id === state.selected ? " active" : "") + (state.checked.has(message.id) ? " checked" : "");
+      row.innerHTML =
+        '<button type="button" class="swipe-archive">Archive</button>' +
+        '<button type="button" class="swipe-delete">Delete</button>' +
+        '<div class="msg-front">' +
+        '<span class="tick" aria-hidden="true"></span>' +
         '<span class="when">' + esc(when(message.receivedDateTime)) + "</span>" +
         '<div class="from">' + esc(person(message.from) || "(no sender)") + "</div>" +
         '<div class="subject">' + esc(message.subject || "(no subject)") + "</div>" +
-        '<div class="preview">' + esc(message.bodyPreview || "") + "</div>";
-      button.addEventListener("click", () => openMessage(message.id));
-      frag.appendChild(button);
+        '<div class="preview">' + esc(message.bodyPreview || "") + "</div>" +
+        "</div>";
+      bindSwipe(row, message);
+      frag.appendChild(row);
     });
     list.replaceChildren(frag);
     if (state.next) {
@@ -275,6 +457,85 @@
     URL.revokeObjectURL(link.href);
   }
 
+  async function moveMessages(ids, destinationId) {
+    const list = [...new Set(ids)].filter(Boolean);
+    if (!list.length) return;
+    if (!destinationId) throw new Error("Pick a folder");
+    for (let i = 0; i < list.length; i += 20) {
+      const slice = list.slice(i, i + 20);
+      const data = await graph("/$batch", {
+        method: "POST",
+        body: {
+          requests: slice.map((id, index) => ({
+            id: String(index + 1),
+            method: "POST",
+            url: "/me/messages/" + encodeURIComponent(id) + "/move",
+            headers: { "Content-Type": "application/json" },
+            body: { destinationId },
+          })),
+        },
+      });
+      const failed = (data && data.responses || []).find((item) => item.status >= 400);
+      if (failed) {
+        const message = failed.body && failed.body.error && failed.body.error.message;
+        throw new Error(message || "Microsoft did not move every message");
+      }
+    }
+    finishBulk(list, list.length + " moved in Microsoft 365");
+  }
+
+  async function deleteMessages(ids) {
+    const list = [...new Set(ids)].filter(Boolean);
+    if (!list.length) return;
+    for (let i = 0; i < list.length; i += 20) {
+      const slice = list.slice(i, i + 20);
+      const data = await graph("/$batch", {
+        method: "POST",
+        body: {
+          requests: slice.map((id, index) => ({
+            id: String(index + 1),
+            method: "DELETE",
+            url: "/me/messages/" + encodeURIComponent(id),
+          })),
+        },
+      });
+      const failed = (data && data.responses || []).find((item) => item.status >= 400);
+      if (failed) {
+        const message = failed.body && failed.body.error && failed.body.error.message;
+        throw new Error(message || "Microsoft did not delete every message");
+      }
+    }
+    finishBulk(list, list.length + " deleted in Microsoft 365");
+  }
+
+  function finishBulk(ids, label) {
+    ids.forEach((id) => state.checked.delete(id));
+    if (state.selected && ids.includes(state.selected)) {
+      state.selected = null;
+      state.open = null;
+      $("reader").innerHTML = '<p class="empty">Select a message.</p>';
+    }
+    status(label);
+    return refresh(true);
+  }
+
+  function trashMessages(ids) {
+    const trash = knownFolder("deleteditems");
+    if (trash && state.folderId !== trash.id) return moveMessages(ids, trash.id);
+    return deleteMessages(ids);
+  }
+
+  function archiveMessages(ids) {
+    const archive = knownFolder("archive");
+    if (!archive) throw new Error("Archive folder was not found");
+    if (state.folderId === archive.id) return Promise.resolve();
+    return moveMessages(ids, archive.id);
+  }
+
+  function selectedIds() {
+    return [...state.checked];
+  }
+
   async function markUnread() {
     if (!state.selected) return;
     await graph("/me/messages/" + state.selected, { method: "PATCH", body: { isRead: false } });
@@ -283,16 +544,7 @@
 
   async function removeMessage() {
     if (!state.selected) return;
-    const trash = state.folders.find((folder) => folder.wellKnownName === "deleteditems");
-    if (trash && state.folderId !== trash.id) {
-      await graph("/me/messages/" + state.selected + "/move", { method: "POST", body: { destinationId: trash.id } });
-    } else {
-      await graph("/me/messages/" + state.selected, { method: "DELETE" });
-    }
-    state.selected = null;
-    state.open = null;
-    $("reader").innerHTML = '<p class="empty">Message removed.</p>';
-    await refresh(false);
+    await trashMessages([state.selected]);
   }
 
   function startCompose(mode) {
@@ -352,6 +604,8 @@
     state.search = "";
     $("search").value = "";
     state.selected = null;
+    state.checked.clear();
+    state.selecting = false;
     $("reader").innerHTML = '<p class="empty">Select a message.</p>';
     renderFolders();
     await loadMessages(false);
@@ -438,6 +692,23 @@
     input.click();
   });
   $("signout").addEventListener("click", () => window.DartAuth.signOut());
+  $("select-toggle").addEventListener("click", () => {
+    state.selecting = !state.selecting;
+    if (!state.selecting) state.checked.clear();
+    renderList();
+  });
+  $("select-all").addEventListener("click", () => {
+    if (state.checked.size === state.messages.length) state.checked.clear();
+    else state.messages.forEach((message) => state.checked.add(message.id));
+    renderList();
+  });
+  $("bulk-delete").addEventListener("click", () => trashMessages(selectedIds()).catch(toast));
+  $("bulk-archive").addEventListener("click", () => archiveMessages(selectedIds()).catch(toast));
+  $("bulk-move").addEventListener("change", (event) => {
+    const destination = event.target.value;
+    if (!destination) return;
+    moveMessages(selectedIds(), destination).catch(toast);
+  });
   $("sync").addEventListener("click", () => refresh(false).catch(toast));
   $("compose-open").addEventListener("click", () => startCompose("new"));
   $("compose-close").addEventListener("click", () => $("compose").close());
@@ -456,4 +727,8 @@
     showGate();
     toast(error);
   });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
 })();
