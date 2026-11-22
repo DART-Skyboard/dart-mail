@@ -66,10 +66,8 @@
 
   function toast(error) {
     const message = error && error.message ? error.message : String(error);
-    status(message);
-    const gate = $("gate-error");
-    if (!$("shell").hidden) return;
-    gate.textContent = message;
+    if (!$("shell").hidden) status(message);
+    if (!$("gate").hidden) $("gate-error").textContent = message;
   }
 
   function addresses(value) {
@@ -404,6 +402,7 @@
   function showMail(account) {
     $("gate").hidden = true;
     $("shell").hidden = false;
+    $("avatar").hidden = false;
     $("who").textContent = (account && account.username) || "";
     paintAvatar($("avatar"), localStorage.getItem("dartmail.avatar") || "", account);
     showPicture(account);
@@ -412,7 +411,10 @@
   }
 
   function showGate() {
-    paintAvatar($("gate-avatar"), localStorage.getItem("dartmail.avatar") || "", { username: $("email").value });
+    $("gate").hidden = false;
+    $("shell").hidden = true;
+    $("avatar").hidden = true;
+    $("who").textContent = "";
   }
 
   $("signin-form").addEventListener("submit", (event) => {

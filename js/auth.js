@@ -45,8 +45,10 @@
 
   function signIn(loginHint) {
     if (!pca) throw new Error("Mail sign-in is not connected yet.");
-    const hint = loginHint || (window.DART_MAIL_CONFIG && window.DART_MAIL_CONFIG.account) || "";
-    return pca.loginRedirect({ scopes: SCOPES, loginHint: hint });
+    const hint = (loginHint || "").trim();
+    const request = { scopes: SCOPES };
+    if (hint) request.loginHint = hint;
+    return pca.loginRedirect(request);
   }
 
   async function token() {

@@ -11,15 +11,14 @@
 <body>
   <section id="gate" class="gate">
     <div class="gate-card">
-      <div class="avatar large" id="gate-avatar" aria-hidden="true">JV</div>
       <p class="mark">DART Mail</p>
       <form id="signin-form">
         <label for="email">Email
-          <input id="email" name="username" type="email" autocomplete="username" value="justin@dartmeadow.com">
+          <input id="email" name="username" type="email" autocomplete="username" placeholder="Email" required>
         </label>
-        <button id="signin" class="primary" type="submit">Continue</button>
+        <button class="primary" type="submit">Continue</button>
       </form>
-      <p class="hint">GoDaddy asks for the password on the next page. Apple or Chrome can fill it there. This page does not keep it.</p>
+      <p class="hint">Microsoft asks for the password on the next page. This page does not keep it.</p>
       <p id="gate-error" class="error" role="alert"></p>
     </div>
   </section>
@@ -31,7 +30,7 @@
         <input id="search" type="search" placeholder="Search mail" aria-label="Search mail">
       </form>
       <div class="top-actions">
-        <button type="button" class="avatar" id="avatar" title="Picture">JV</button>
+        <button type="button" class="avatar" id="avatar" title="Picture" hidden></button>
         <span id="who" class="who"></span>
         <button id="sync" type="button">Sync</button>
         <button id="compose-open" class="primary" type="button">Compose</button>
@@ -43,7 +42,7 @@
       <section id="list" class="list" aria-label="Messages"></section>
       <article id="reader" class="reader" aria-live="polite"></article>
     </div>
-    <footer class="status"><span id="status">Signed in</span></footer>
+    <footer class="status"><span id="status"></span></footer>
   </div>
 
   <dialog id="compose">
