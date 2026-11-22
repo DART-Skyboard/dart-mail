@@ -365,36 +365,75 @@
     if (!quiet) status("Synced " + new Date().toLocaleTimeString());
   }
 
+  function initials(account) {
+    const name = (account && (account.name || account.username)) || "JV";
+    const parts = String(name).replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
+    return ((parts[0] || "J")[0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
+  }
+
+  function paintAvatar(el, url, account) {
+    el.replaceChildren();
+    if (url) {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "";
+      el.appendChild(img);
+      return;
+    }
+    el.textContent = initials(account);
+  }
+
+  async function microsoftPhoto() {
+    const token = await window.DartAuth.token();
+    const res = await fetch("https://graph.microsoft.com/v1.0/me/photo/$value", {
+      headers: { Authorization: "Bearer " + token },
+    });
+    if (!res.ok) return "";
+    return URL.createObjectURL(await res.blob());
+  }
+
+  async function showPicture(account) {
+    const custom = localStorage.getItem("dartmail.avatar") || "";
+    let url = custom;
+    if (!url) {
+      try { url = await microsoftPhoto(); } catch (err) { url = ""; }
+    }
+    paintAvatar($("avatar"), url, account);
+  }
+
   function showMail(account) {
     $("gate").hidden = true;
     $("shell").hidden = false;
     $("who").textContent = (account && account.username) || "";
+    paintAvatar($("avatar"), localStorage.getItem("dartmail.avatar") || "", account);
+    showPicture(account);
     refresh(true).then(() => status("Synced " + new Date().toLocaleTimeString())).catch(toast);
     window.setInterval(() => refresh(true).catch(() => {}), 45000);
   }
 
-  function showGate(info) {
-    $("redirect-uri").textContent = window.DartAuth.redirectUri();
-    const saved = window.DartAuth.cfg();
-    if (saved.clientId) $("client-id").value = saved.clientId;
-    if (saved.tenantId) $("tenant-id").value = saved.tenantId;
-    $("signin").hidden = !info.configured;
-    $("forget").hidden = !info.configured;
-    $("setup").hidden = info.configured;
+  function showGate() {
+    paintAvatar($("gate-avatar"), localStorage.getItem("dartmail.avatar") || "", { username: $("email").value });
   }
 
-  $("setup").addEventListener("submit", (event) => {
+  $("signin-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    const clientId = $("client-id").value.trim();
-    if (!clientId) return;
-    localStorage.setItem("dartmail.clientId", clientId);
-    localStorage.setItem("dartmail.tenantId", $("tenant-id").value.trim() || "organizations");
-    window.location.reload();
+    window.DartAuth.signIn($("email").value.trim()).catch(toast);
   });
-  $("signin").addEventListener("click", () => window.DartAuth.signIn().catch(toast));
-  $("forget").addEventListener("click", () => {
-    window.DartAuth.clearConnection();
-    window.location.reload();
+  $("avatar").addEventListener("click", () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        localStorage.setItem("dartmail.avatar", String(reader.result || ""));
+        paintAvatar($("avatar"), localStorage.getItem("dartmail.avatar"), { username: $("who").textContent });
+      };
+      reader.readAsDataURL(file);
+    });
+    input.click();
   });
   $("signout").addEventListener("click", () => window.DartAuth.signOut());
   $("sync").addEventListener("click", () => refresh(false).catch(toast));
@@ -409,10 +448,10 @@
   });
 
   window.DartAuth.init().then((info) => {
-    showGate(info);
+    showGate();
     if (info.account) showMail(info.account);
   }).catch((error) => {
-    showGate({ configured: window.DartAuth.configured() });
+    showGate();
     toast(error);
   });
 })();

@@ -11,20 +11,15 @@
 <body>
   <section id="gate" class="gate">
     <div class="gate-card">
+      <div class="avatar large" id="gate-avatar" aria-hidden="true">JV</div>
       <p class="mark">DART Mail</p>
-      <h1>justin@dartmeadow.com</h1>
-      <p class="lede">This page talks to Microsoft 365 with your own sign-in. Mail stays in Office 365. The password is not stored here.</p>
-      <form id="setup">
-        <label for="client-id">Application (client) ID</label>
-        <input id="client-id" name="client-id" autocomplete="off" spellcheck="false" placeholder="From the Entra app registration">
-        <label for="tenant-id">Directory (tenant) ID</label>
-        <input id="tenant-id" name="tenant-id" autocomplete="off" spellcheck="false" value="organizations">
-        <p class="hint">Use <em>organizations</em> unless sign-in says the application was not found. Then paste the Directory ID.</p>
-        <p class="redirect">Redirect URI to register as a single-page application<br><code id="redirect-uri"></code></p>
-        <button type="submit">Save connection</button>
+      <form id="signin-form">
+        <label for="email">Email
+          <input id="email" name="username" type="email" autocomplete="username" value="justin@dartmeadow.com">
+        </label>
+        <button id="signin" class="primary" type="submit">Continue</button>
       </form>
-      <button id="signin" class="primary" type="button" hidden>Sign in with Microsoft</button>
-      <button id="forget" class="text" type="button" hidden>Use a different application</button>
+      <p class="hint">GoDaddy asks for the password on the next page. Apple or Chrome can fill it there. This page does not keep it.</p>
       <p id="gate-error" class="error" role="alert"></p>
     </div>
   </section>
@@ -36,6 +31,7 @@
         <input id="search" type="search" placeholder="Search mail" aria-label="Search mail">
       </form>
       <div class="top-actions">
+        <button type="button" class="avatar" id="avatar" title="Picture">JV</button>
         <span id="who" class="who"></span>
         <button id="sync" type="button">Sync</button>
         <button id="compose-open" class="primary" type="button">Compose</button>

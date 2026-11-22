@@ -71,6 +71,23 @@ button.primary, .primary {
 button.text { background: transparent; border-color: transparent; color: var(--muted); padding-left: 0; }
 .error { min-height: 1.2em; color: var(--danger); font-size: 14px; }
 .gate-card form button { margin-top: 6px; }
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #243028;
+  color: var(--teal);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 0;
+  overflow: hidden;
+  flex: none;
+}
+.avatar.large { width: 72px; height: 72px; font-size: 22px; margin-bottom: 14px; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
 #signin { width: 100%; margin-top: 8px; padding: 12px; }
 
 .shell { height: 100%; display: flex; flex-direction: column; }

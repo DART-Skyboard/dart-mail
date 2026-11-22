@@ -43,8 +43,10 @@
     return { configured: true, account, redirectUri: redirectUri() };
   }
 
-  function signIn() {
-    return pca.loginRedirect({ scopes: SCOPES });
+  function signIn(loginHint) {
+    if (!pca) throw new Error("Mail sign-in is not connected yet.");
+    const hint = loginHint || (window.DART_MAIL_CONFIG && window.DART_MAIL_CONFIG.account) || "";
+    return pca.loginRedirect({ scopes: SCOPES, loginHint: hint });
   }
 
   async function token() {
