@@ -259,6 +259,7 @@
     let horizontal = false;
     let timer = 0;
     let suppress = false;
+    let revealed = "";
 
     function place(x, snap) {
       front.style.transition = snap ? "transform 0.16s ease" : "none";
@@ -277,7 +278,8 @@
       timer = window.setTimeout(() => {
         if (!tracking) return;
         horizontal = true;
-        place(dx > 12 ? 88 : -88, true);
+        revealed = dx > 12 ? "archive" : "delete";
+        place(revealed === "archive" ? 88 : -88, true);
       }, 460);
     });
     row.addEventListener("pointermove", (event) => {
@@ -301,6 +303,11 @@
       window.clearTimeout(timer);
       if (!tracking) return;
       tracking = false;
+      if (revealed && Math.abs(dx) < 48) {
+        suppress = true;
+        return;
+      }
+      revealed = "";
       if (!horizontal) {
         place(0, true);
         return;
